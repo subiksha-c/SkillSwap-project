@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skill Exchange System | SkillSwap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/realtime.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
+    }
+    .notification-badge {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div class="min-h-screen bg-black bg-opacity-20">
+    <!-- Header -->
+    <nav class="bg-white shadow-lg">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+        <h1 class="text-2xl font-bold text-gray-800">🔄 Skill Exchange System</h1>
+        <div class="flex items-center gap-4">
+          <span id="connectionStatus" class="text-sm text-gray-500">Connecting...</span>
+          <div class="flex gap-2">
+            <button onclick="window.location.href='dash.html'" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              🏠 Dashboard
+            </button>
+            <button onclick="window.location.href='notifications.html'" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 relative">
+              📢 Notifications
+              <span id="notificationBadge" class="notification-badge absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs px-2 py-1 hidden">0</span>
+            </button>
+            <button onclick="window.location.href='chat.html'" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+              💬 Chat
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto p-6">
+      <!-- User Points Display -->
+      <div class="bg-white rounded-xl shadow-lg p-4 mb-6">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-6">
+            <div class="text-center">
+              <div class="text-2xl font-bold text-blue-600" id="userPoints">100</div>
+              <div class="text-sm text-gray-600">Points</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold text-yellow-600" id="userCoins">50</div>
+              <div class="text-sm text-gray-600">Coins</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold text-green-600" id="userXP">0</div>
+              <div class="text-sm text-gray-600">XP</div>
+            </div>
+          </div>
+          <div class="text-sm text-gray-500">
+            💡 Earn points by accepting requests • Spend 5 points to send requests
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="bg-white rounded-xl shadow-lg mb-6">
+        <div class="flex border-b">
+          <button id="browseTab" class="px-6 py-3 font-semibold text-blue-600 border-b-2 border-blue-600" onclick="switchTab('browse')">
+            🔍 Browse Skills
+          </button>
+          <button id="requestsTab" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600" onclick="switchTab('requests')">
+            📥 My Requests
+          </button>
+          <button id="sentTab" class="px-6 py-3 font-semibold text-gray-500 hover:text-blue-600" onclick="switchTab('sent')">
+            📤 Sent Requests
+          </button>
+        </div>
+
+        <!-- Browse Skills Tab -->
+        <div id="browseContent" class="p-6">
+          <div class="flex gap-4 mb-6">
+            <input type="text" id="searchSkill" placeholder="Search skills..." class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+            <select id="categoryFilter" class="px-4 py-2 border rounded-lg">
+              <option value="">All Categories</option>
+              <option value="Programming">Programming</option>
+              <option value="Design">Design</option>
+              <option value="Music">Music</option>
+              <option value="Language">Language</option>
+              <option value="Cooking">Cooking</option>
+              <option value="Sports">Sports</option>
+            </select>
+            <button onclick="loadSkills()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              🔄 Refresh
+            </button>
+          </div>
+          <div id="skillsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Skills will be loaded here -->
+          </div>
+        </div>
+
+        <!-- My Requests Tab -->
+        <div id="requestsContent" class="p-6 hidden">
+          <div class="mb-4">
+            <h3 class="text-lg font-semibold mb-2">📥 Requests I've Received</h3>
+            <p class="text-gray-600 text-sm">Requests from other users who want to learn your skills</p>
+          </div>
+          <div id="receivedRequestsList" class="space-y-4">
+            <!-- Received requests will be loaded here -->
+          </div>
+        </div>
+
+        <!-- Sent Requests Tab -->
+        <div id="sentContent" class="p-6 hidden">
+          <div class="mb-4">
+            <h3 class="text-lg font-semibold mb-2">📤 Requests I've Sent</h3>
+            <p class="text-gray-600 text-sm">Track the status of your skill learning requests</p>
+          </div>
+          <div id="sentRequestsList" class="space-y-4">
+            <!-- Sent requests will be loaded here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skill Request Modal -->
+  <div id="requestModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
+    <div class="bg-white p-6 rounded-xl w-96 shadow-lg">
+      <h2 class="text-xl font-semibold mb-4 text-center">📝 Send Skill Request</h2>
+      
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1">Skill</label>
+        <input type="text" id="modalSkillName" class="w-full border p-2 rounded" readonly>
+        <input type="hidden" id="modalSkillId">
+        <input type="hidden" id="modalSkillOwnerId">
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1">Learning Duration</label>
+        <input type="text" id="modalDuration" class="w-full border p-2 rounded" placeholder="e.g., 2 weeks, 1 month">
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium mb-1">Message</label>
+        <textarea id="modalMessage" class="w-full border p-2 rounded" rows="3" placeholder="Why do you want to learn this skill?"></textarea>
+      </div>
+
+      <div class="mb-4 p-3 bg-yellow-50 rounded border-l-4 border-yellow-400">
+        <p class="text-sm text-yellow-800">💰 This request will cost 5 points</p>
+      </div>
+
+      <div class="flex justify-between">
+        <button onclick="closeRequestModal()" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">
+          Cancel
+        </button>
+        <button onclick="sendSkillRequest()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          📩 Send Request (5 points)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let currentTab = 'browse';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      if (!currentUser.id) {
+        alert('Please login first');
+        window.location.href = 'login.html';
+        return;
+      }
+      
+      loadUserPoints();
+      loadSkills();
+      setupRealTimeListeners();
+    });
+
+    // Tab switching
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      // Update tab buttons
+      document.querySelectorAll('[id$="Tab"]').forEach(btn => {
+        btn.className = 'px-6 py-3 font-semibold text-gray-500 hover:text-blue-600';
+      });
+      document.getElementById(tab + 'Tab').className = 'px-6 py-3 font-semibold text-blue-600 border-b-2 border-blue-600';
+      
+      // Update content
+      document.querySelectorAll('[id$="Content"]').forEach(content => {
+        content.classList.add('hidden');
+      });
+      document.getElementById(tab + 'Content').classList.remove('hidden');
+      
+      // Load appropriate data
+      if (tab === 'browse') {
+        loadSkills();
+      } else if (tab === 'requests') {
+        loadReceivedRequests();
+      } else if (tab === 'sent') {
+        loadSentRequests();
+      }
+    }
+
+    // Load user points
+    async function loadUserPoints() {
+      try {
+        const response = await fetch(`http://localhost:5000/api/user-points/${currentUser.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          document.getElementById('userPoints').textContent = data.points;
+          document.getElementById('userCoins').textContent = data.coins;
+          document.getElementById('userXP').textContent = data.xp;
+        }
+      } catch (error) {
+        console.error('Error loading user points:', error);
+      }
+    }
+
+    // Load skills
+    async function loadSkills() {
+      try {
+        const response = await fetch('http://localhost:5000/skills/all');
+        if (response.ok) {
+          const skills = await response.json();
+          displaySkills(skills.filter(skill => skill.user_id !== currentUser.id));
+        }
+      } catch (error) {
+        console.error('Error loading skills:', error);
+      }
+    }
+
+    // Display skills
+    function displaySkills(skills) {
+      const container = document.getElementById('skillsList');
+      
+      if (skills.length === 0) {
+        container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No skills available</div>';
+        return;
+      }
+
+      container.innerHTML = skills.map(skill => `
+        <div class="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-semibold text-lg text-gray-800">${skill.skill_name}</h3>
+              <p class="text-sm text-gray-600">by ${skill.user_name}</p>
+            </div>
+            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${skill.category || 'General'}</span>
+          </div>
+          
+          <p class="text-gray-700 text-sm mb-3">${skill.description || 'No description available'}</p>
+          
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-500">
+              📍 ${skill.location || 'Location not specified'}
+            </div>
+            <button onclick="openRequestModal(${skill.id}, '${skill.skill_name}', ${skill.user_id})" 
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+              📩 Request Skill
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Open request modal
+    function openRequestModal(skillId, skillName, ownerId) {
+      document.getElementById('modalSkillId').value = skillId;
+      document.getElementById('modalSkillName').value = skillName;
+      document.getElementById('modalSkillOwnerId').value = ownerId;
+      document.getElementById('modalDuration').value = '';
+      document.getElementById('modalMessage').value = '';
+      document.getElementById('requestModal').classList.remove('hidden');
+    }
+
+    // Close request modal
+    function closeRequestModal() {
+      document.getElementById('requestModal').classList.add('hidden');
+    }
+
+    // Send skill request
+    async function sendSkillRequest() {
+      const skillId = document.getElementById('modalSkillId').value;
+      const skillName = document.getElementById('modalSkillName').value;
+      const ownerId = document.getElementById('modalSkillOwnerId').value;
+      const duration = document.getElementById('modalDuration').value;
+      const message = document.getElementById('modalMessage').value;
+
+      if (!duration.trim() || !message.trim()) {
+        alert('Please fill in all fields');
+        return;
+      }
+
+      try {
+        // Send notification
+        const response = await fetch('http://localhost:5000/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromUserId: currentUser.id,
+            toUserId: ownerId,
+            skillName: skillName,
+            duration: duration,
+            message: message
+          })
+        });
+
+        if (response.ok) {
+          // Deduct points
+          await fetch('http://localhost:5000/requests/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from_user: currentUser.id,
+              to_user: ownerId,
+              skill_id: skillId
+            })
+          });
+
+          alert('✅ Skill request sent successfully! 5 points deducted.');
+          closeRequestModal();
+          loadUserPoints();
+          
+          // Show success toast
+          showToast('Skill request sent successfully!', 'success');
+        } else {
+          const error = await response.json();
+          alert('❌ ' + error.message);
+        }
+      } catch (error) {
+        console.error('Error sending request:', error);
+        alert('❌ Failed to send request');
+      }
+    }
+
+    // Load received requests
+    async function loadReceivedRequests() {
+      try {
+        const response = await fetch(`http://localhost:5000/notifications/${currentUser.id}`);
+        if (response.ok) {
+          const notifications = await response.json();
+          displayReceivedRequests(notifications);
+        }
+      } catch (error) {
+        console.error('Error loading received requests:', error);
+      }
+    }
+
+    // Display received requests
+    function displayReceivedRequests(requests) {
+      const container = document.getElementById('receivedRequestsList');
+      
+      if (requests.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-500 py-8">No requests received yet</div>';
+        return;
+      }
+
+      container.innerHTML = requests.map(request => `
+        <div class="bg-white rounded-lg shadow-md p-4 border-l-4 ${getStatusBorderColor(request.status)}">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <h3 class="font-semibold text-lg">${request.skill_name}</h3>
+              <p class="text-sm text-gray-600">From: ${request.from_user_name}</p>
+              <p class="text-xs text-gray-500">${formatDate(request.created_at)}</p>
+            </div>
+            <span class="px-2 py-1 ${getStatusBadgeClass(request.status)} text-xs rounded-full">
+              ${request.status.toUpperCase()}
+            </span>
+          </div>
+          
+          ${request.duration ? `<p class="text-sm mb-2"><strong>Duration:</strong> ${request.duration}</p>` : ''}
+          ${request.message ? `<p class="text-sm mb-3 bg-gray-50 p-2 rounded italic">"${request.message}"</p>` : ''}
+          
+          ${request.status === 'unread' ? `
+            <div class="flex gap-2">
+              <button onclick="respondToRequest(${request.id}, 'accepted')" 
+                      class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+                ✅ Accept (+10 points, +2 coins, +15 XP)
+              </button>
+              <button onclick="respondToRequest(${request.id}, 'rejected')" 
+                      class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                ❌ Reject
+              </button>
+            </div>
+          ` : request.status === 'accepted' ? `
+            <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-3">
+              🎉 <strong>Request Accepted!</strong> Chat room has been created.
+            </div>
+            <button onclick="startChat(${request.from_user_id}, '${request.skill_name}')" 
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
+              💬 Enter Chat Room
+            </button>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    // Load sent requests
+    async function loadSentRequests() {
+      try {
+        const response = await fetch(`http://localhost:5000/requests/${currentUser.id}`);
+        if (response.ok) {
+          const requests = await response.json();
+          displaySentRequests(requests);
+        }
+      } catch (error) {
+        console.error('Error loading sent requests:', error);
+      }
+    }
+
+    // Display sent requests
+    function displaySentRequests(requests) {
+      const container = document.getElementById('sentRequestsList');
+      
+      if (requests.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-500 py-8">No requests sent yet</div>';
+        return;
+      }
+
+      container.innerHTML = requests.map(request => `
+        <div class="bg-white rounded-lg shadow-md p-4 border-l-4 ${getStatusBorderColor(request.status)}">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <h3 class="font-semibold text-lg">${request.skill_name}</h3>
+              <p class="text-sm text-gray-600">To: ${request.from_user_name}</p>
+              <p class="text-xs text-gray-500">${formatDate(request.created_at)}</p>
+            </div>
+            <span class="px-2 py-1 ${getStatusBadgeClass(request.status)} text-xs rounded-full">
+              ${request.status.toUpperCase()}
+            </span>
+          </div>
+          
+          ${request.status === 'accepted' ? `
+            <div class="bg-green-50 p-3 rounded-lg border border-green-200 mb-3">
+              ✅ <strong>Request Accepted!</strong> You can now chat and learn together.
+            </div>
+            <button onclick="startChat(${request.to_user}, '${request.skill_name}')" 
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
+              💬 Enter Chat Room
+            </button>
+          ` : request.status === 'pending' ? `
+            <button onclick="cancelRequest(${request.id})" 
+                    class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
+              🗑️ Cancel Request (+5 points refund)
+            </button>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    // Respond to request
+    async function respondToRequest(requestId, status) {
+      try {
+        const response = await fetch('http://localhost:5000/notifications/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notification_id: requestId, status: status })
+        });
+
+        if (response.ok) {
+          if (status === 'accepted') {
+            // Update request status in requests table too
+            await fetch('http://localhost:5000/requests/accept', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ request_id: requestId })
+            });
+            
+            showToast('Request accepted! You earned 10 points, 2 coins, and 15 XP!', 'success');
+          } else {
+            showToast('Request rejected', 'info');
+          }
+          
+          loadReceivedRequests();
+          loadUserPoints();
+        }
+      } catch (error) {
+        console.error('Error responding to request:', error);
+      }
+    }
+
+    // Start chat (only works if request was accepted)
+    async function startChat(otherUserId, skillName) {
+      try {
+        // Check if chat room exists (meaning request was accepted)
+        const checkResponse = await fetch(`http://localhost:5000/chat/rooms/${currentUser.id}`);
+        if (checkResponse.ok) {
+          const rooms = await checkResponse.json();
+          const existingRoom = rooms.find(room => 
+            (room.user1_id === otherUserId || room.user2_id === otherUserId) && 
+            room.skill_name === skillName
+          );
+          
+          if (existingRoom) {
+            // Chat room exists, redirect to chat
+            window.location.href = `chat.html?room=${existingRoom.id}&skill=${encodeURIComponent(skillName)}`;
+          } else {
+            // No chat room exists, request wasn't accepted yet
+            showToast('❌ Chat not available. The request must be accepted first.', 'error');
+          }
+        }
+      } catch (error) {
+        console.error('Error starting chat:', error);
+        showToast('❌ Failed to start chat', 'error');
+      }
+    }
+    
+    // Start chat from notification (direct access with room ID)
+    function startChatFromNotification(chatRoomId, skillName) {
+      window.location.href = `chat.html?room=${chatRoomId}&skill=${encodeURIComponent(skillName)}`;
+    }
+
+    // Cancel request
+    async function cancelRequest(requestId) {
+      if (!confirm('Are you sure you want to cancel this request? You will get 5 points refunded.')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:5000/requests/cancel/${requestId}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          showToast('Request cancelled! 5 points refunded.', 'success');
+          loadSentRequests();
+          loadUserPoints();
+        }
+      } catch (error) {
+        console.error('Error cancelling request:', error);
+      }
+    }
+
+    // Utility functions
+    function getStatusBorderColor(status) {
+      switch (status) {
+        case 'unread': return 'border-blue-500';
+        case 'accepted': return 'border-green-500';
+        case 'rejected': return 'border-red-500';
+        case 'pending': return 'border-yellow-500';
+        default: return 'border-gray-300';
+      }
+    }
+
+    function getStatusBadgeClass(status) {
+      switch (status) {
+        case 'unread': return 'bg-blue-100 text-blue-800';
+        case 'accepted': return 'bg-green-100 text-green-800';
+        case 'rejected': return 'bg-red-100 text-red-800';
+        case 'pending': return 'bg-yellow-100 text-yellow-800';
+        default: return 'bg-gray-100 text-gray-800';
+      }
+    }
+
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) return 'Today';
+      if (diffDays === 2) return 'Yesterday';
+      if (diffDays <= 7) return `${diffDays - 1} days ago`;
+      
+      return date.toLocaleDateString();
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+      
+      toast.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-x-full`;
+      toast.textContent = message;
+      
+      document.body.appendChild(toast);
+      
+      setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+      setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => document.body.removeChild(toast), 300);
+      }, 4000);
+    }
+
+    // Real-time setup
+    function setupRealTimeListeners() {
+      if (window.realTimeManager) {
+        window.realTimeManager.on('connected', () => {
+          document.getElementById('connectionStatus').textContent = '🟢 Live';
+          document.getElementById('connectionStatus').className = 'text-green-600 font-medium text-sm';
+        });
+
+        window.realTimeManager.on('notification', (data) => {
+          showToast(`New skill request from ${data.from_user_name}!`, 'info');
+          updateNotificationBadge();
+          
+          // Refresh current tab if it's requests
+          if (currentTab === 'requests') {
+            loadReceivedRequests();
+          }
+        });
+
+        window.realTimeManager.on('request_accepted', (data) => {
+          showToast(data.message, 'success');
+          loadUserPoints();
+          
+          // Show chat button if chat room was created
+          if (data.chat_room_id && data.action === 'start_chat') {
+            // Show notification with chat option
+            const chatNotification = document.createElement('div');
+            chatNotification.className = 'fixed top-20 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 max-w-sm';
+            chatNotification.innerHTML = `
+              <div class="mb-2">🎉 Chat room created!</div>
+              <div class="text-sm mb-3">You can now chat with ${data.other_user} about ${data.skill_name}</div>
+              <button onclick="startChatFromNotification(${data.chat_room_id}, '${data.skill_name}')" 
+                      class="w-full px-3 py-2 bg-white text-green-600 rounded hover:bg-gray-100">
+                💬 Start Chat Now
+              </button>
+            `;
+            document.body.appendChild(chatNotification);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+              if (document.body.contains(chatNotification)) {
+                document.body.removeChild(chatNotification);
+              }
+            }, 10000);
+          }
+          
+          // Refresh current tab
+          if (currentTab === 'sent') {
+            loadSentRequests();
+          } else if (currentTab === 'requests') {
+            loadReceivedRequests();
+          }
+        });
+
+        window.realTimeManager.on('error', () => {
+          document.getElementById('connectionStatus').textContent = '🔴 Offline';
+          document.getElementById('connectionStatus').className = 'text-red-600 font-medium text-sm';
+        });
+      }
+    }
+
+    function updateNotificationBadge() {
+      const badge = document.getElementById('notificationBadge');
+      const currentCount = parseInt(badge.textContent) || 0;
+      badge.textContent = currentCount + 1;
+      badge.classList.remove('hidden');
+    }
+
+    // Search and filter functionality
+    document.getElementById('searchSkill').addEventListener('input', filterSkills);
+    document.getElementById('categoryFilter').addEventListener('change', filterSkills);
+
+    function filterSkills() {
+      const searchTerm = document.getElementById('searchSkill').value.toLowerCase();
+      const category = document.getElementById('categoryFilter').value;
+      
+      const skillCards = document.querySelectorAll('#skillsList > div');
+      skillCards.forEach(card => {
+        const skillName = card.querySelector('h3').textContent.toLowerCase();
+        const skillCategory = card.querySelector('.bg-blue-100').textContent;
+        
+        const matchesSearch = skillName.includes(searchTerm);
+        const matchesCategory = !category || skillCategory === category;
+        
+        card.style.display = matchesSearch && matchesCategory ? 'block' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

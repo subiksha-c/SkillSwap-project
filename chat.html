@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat | SkillSwap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/realtime.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Inter', sans-serif;
+    }
+    .chat-container {
+      height: calc(100vh - 120px);
+    }
+    .messages-container {
+      height: calc(100% - 80px);
+      overflow-y: auto;
+    }
+    .message-bubble {
+      max-width: 70%;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="min-h-screen bg-black bg-opacity-20">
+    <!-- Header -->
+    <nav class="bg-white shadow-lg">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-4">
+          <button onclick="goBack()" class="text-gray-600 hover:text-gray-800">
+            ← Back
+          </button>
+          <h1 class="text-2xl font-bold text-gray-800">💬 Chat</h1>
+          <span id="connectionStatus" class="text-sm text-gray-500">Connecting...</span>
+          <span id="skillBadge" class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold"></span>
+        </div>
+        <div class="flex gap-4">
+          <button onclick="window.location.href='notifications.html'" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">
+            📢 Notifications
+          </button>
+          <button onclick="window.location.href='dash.html'" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            🏠 Dashboard
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto p-4 flex gap-4 chat-container">
+      <!-- Chat Rooms Sidebar -->
+      <div class="w-1/3 bg-white rounded-xl shadow-lg p-4">
+        <h3 class="text-lg font-semibold mb-4">Your Chats</h3>
+        <div id="chatRoomsList" class="space-y-2">
+          <!-- Chat rooms will be loaded here -->
+        </div>
+        <div id="noChatRooms" class="hidden text-center py-8 text-gray-500">
+          <div class="text-4xl mb-2">💬</div>
+          <p>No chat rooms yet</p>
+          <p class="text-sm">Start a conversation from notifications!</p>
+        </div>
+      </div>
+
+      <!-- Chat Messages Area -->
+      <div class="flex-1 bg-white rounded-xl shadow-lg flex flex-col">
+        <div id="chatHeader" class="p-4 border-b border-gray-200 hidden">
+          <div class="flex items-center gap-3">
+            <div id="otherUserAvatar" class="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
+              U
+            </div>
+            <div>
+              <h3 id="otherUserName" class="font-semibold">Select a chat</h3>
+              <p id="chatSkillName" class="text-sm text-gray-500"></p>
+            </div>
+          </div>
+        </div>
+
+        <div id="messagesContainer" class="messages-container p-4 space-y-3">
+          <div id="selectChatMessage" class="flex items-center justify-center h-full text-gray-500">
+            <div class="text-center">
+              <div class="text-6xl mb-4">💬</div>
+              <h3 class="text-xl font-semibold mb-2">Select a chat to start messaging</h3>
+              <p>Choose a conversation from the sidebar to begin chatting.</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="messageInput" class="p-4 border-t border-gray-200 hidden">
+          <div class="flex gap-2">
+            <input type="text" id="messageText" placeholder="Type your message..." 
+                   class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="sendMessage()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let chatRooms = [];
+    let currentChatRoom = null;
+    let messages = [];
+    const loggedInUser = parseInt(localStorage.getItem('ss_user_id'));
+    const loggedInUserName = localStorage.getItem('ss_user');
+
+    if (!loggedInUser) {
+      alert("❌ Please login first");
+      window.location.href = "login.html";
+    }
+
+    // Load chat rooms and handle URL parameters
+    window.addEventListener('load', () => {
+      loadChatRooms();
+      
+      // Check if we have a specific room to open from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomId = urlParams.get('room');
+      const skillName = urlParams.get('skill');
+      
+      if (roomId) {
+        setTimeout(() => openChatRoom(parseInt(roomId), skillName), 500);
+      }
+      
+      // Setup real-time chat functionality
+      setupRealTimeChat();
+    });
+
+    // Setup real-time chat functionality
+    function setupRealTimeChat() {
+      if (window.realTimeManager) {
+        // Listen for real-time chat messages
+        window.realTimeManager.on('chat_message', (messageData) => {
+          console.log('💬 Real-time message received:', messageData);
+          
+          // Only add message if it's for the current chat room
+          if (currentChatRoom && messageData.chat_room_id === currentChatRoom.id) {
+            // Don't add if it's from the current user (already added locally)
+            if (messageData.sender_id !== loggedInUser) {
+              addMessageToChat(messageData);
+            }
+          }
+        });
+
+        // Listen for connection status
+        window.realTimeManager.on('connected', () => {
+          showConnectionStatus(true);
+        });
+
+        window.realTimeManager.on('error', () => {
+          showConnectionStatus(false);
+        });
+      }
+    }
+
+    // Add message to chat in real-time
+    function addMessageToChat(messageData) {
+      messages.push({
+        id: messageData.id,
+        message: messageData.message,
+        sender_id: messageData.sender_id,
+        sender_name: messageData.sender_name,
+        created_at: messageData.created_at
+      });
+      
+      renderMessages();
+      
+      // Show notification if chat is not in focus
+      if (document.hidden) {
+        showChatNotification(messageData.sender_name, messageData.message);
+      }
+    }
+
+    // Show chat notification
+    function showChatNotification(senderName, message) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(`${senderName} sent a message`, {
+          body: message.substring(0, 100),
+          icon: '/favicon.ico'
+        });
+      }
+    }
+
+    // Show connection status
+    function showConnectionStatus(connected) {
+      const statusElement = document.getElementById('connectionStatus');
+      if (statusElement) {
+        statusElement.textContent = connected ? '🟢 Live' : '🔴 Offline';
+        statusElement.className = connected ? 'text-green-600 font-medium text-sm' : 'text-red-600 font-medium text-sm';
+      }
+    }
+
+    async function loadChatRooms() {
+      try {
+        const res = await fetch(`http://localhost:5000/chat/rooms/${loggedInUser}`);
+        if (res.ok) {
+          chatRooms = await res.json();
+          renderChatRooms();
+        } else {
+          console.error('Failed to load chat rooms');
+        }
+      } catch (err) {
+        console.error('Error loading chat rooms:', err);
+      }
+    }
+
+    function renderChatRooms() {
+      const container = document.getElementById('chatRoomsList');
+      const noChatRooms = document.getElementById('noChatRooms');
+      
+      if (chatRooms.length === 0) {
+        container.innerHTML = '';
+        noChatRooms.classList.remove('hidden');
+        return;
+      }
+      
+      noChatRooms.classList.add('hidden');
+      
+      container.innerHTML = chatRooms.map(room => `
+        <div onclick="openChatRoom(${room.id}, '${room.skill_name}')" 
+             class="p-3 rounded-lg cursor-pointer hover:bg-gray-100 transition ${currentChatRoom?.id === room.id ? 'bg-blue-100 border-l-4 border-blue-500' : ''}">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+              ${room.other_user_name.charAt(0).toUpperCase()}
+            </div>
+            <div class="flex-1">
+              <h4 class="font-semibold text-sm">${room.other_user_name}</h4>
+              <p class="text-xs text-gray-500">${room.skill_name || 'General Chat'}</p>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function openChatRoom(roomId, skillName) {
+      // Find the room in our list
+      const room = chatRooms.find(r => r.id === roomId);
+      if (!room) {
+        console.error('Chat room not found');
+        return;
+      }
+      
+      currentChatRoom = room;
+      
+      // Update UI
+      document.getElementById('chatHeader').classList.remove('hidden');
+      document.getElementById('messageInput').classList.remove('hidden');
+      document.getElementById('selectChatMessage').style.display = 'none';
+      
+      document.getElementById('otherUserName').textContent = room.other_user_name;
+      document.getElementById('chatSkillName').textContent = skillName || room.skill_name || 'General Chat';
+      document.getElementById('skillBadge').textContent = skillName || room.skill_name || 'Chat';
+      
+      const avatar = document.getElementById('otherUserAvatar');
+      avatar.textContent = room.other_user_name.charAt(0).toUpperCase();
+      
+      // Load messages for this room
+      await loadMessages(roomId);
+      
+      // Re-render chat rooms to highlight selected
+      renderChatRooms();
+    }
+
+    async function loadMessages(roomId) {
+      try {
+        const res = await fetch(`http://localhost:5000/chat/messages/${roomId}`);
+        if (res.ok) {
+          messages = await res.json();
+          renderMessages();
+        } else {
+          console.error('Failed to load messages');
+        }
+      } catch (err) {
+        console.error('Error loading messages:', err);
+      }
+    }
+
+    function renderMessages() {
+      const container = document.getElementById('messagesContainer');
+      
+      if (messages.length === 0) {
+        container.innerHTML = `
+          <div class="flex items-center justify-center h-full text-gray-500">
+            <div class="text-center">
+              <div class="text-4xl mb-2">👋</div>
+              <p>No messages yet. Start the conversation!</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = messages.map(message => {
+        const isMyMessage = message.sender_id === loggedInUser;
+        return `
+          <div class="flex ${isMyMessage ? 'justify-end' : 'justify-start'}">
+            <div class="message-bubble ${isMyMessage ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800'} rounded-lg px-4 py-2">
+              <div class="text-sm font-semibold mb-1">${isMyMessage ? 'You' : message.sender_name}</div>
+              <div>${message.message}</div>
+              <div class="text-xs opacity-75 mt-1">${formatMessageTime(message.created_at)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      // Scroll to bottom
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const messageText = document.getElementById('messageText');
+      const text = messageText.value.trim();
+      
+      if (!text || !currentChatRoom) return;
+      
+      try {
+        const res = await fetch('http://localhost:5000/chat/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_room_id: currentChatRoom.id,
+            sender_id: loggedInUser,
+            message: text
+          })
+        });
+
+        if (res.ok) {
+          // Add message to local array (real-time will handle for other users)
+          messages.push({
+            id: Date.now(), // temporary ID
+            message: text,
+            sender_id: loggedInUser,
+            sender_name: loggedInUserName,
+            created_at: new Date().toISOString()
+          });
+          
+          renderMessages();
+          messageText.value = ''
+          
+          // Note: Real-time message will be sent to other users automatically by the server
+        } else {
+          alert('❌ Failed to send message');
+        }
+      } catch (err) {
+        console.error('Error sending message:', err);
+        alert('❌ Failed to send message');
+      }
+    }
+
+    // Send message on Enter key
+    document.getElementById('messageText').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+
+    function formatMessageTime(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function goBack() {
+      // Check if we came from notifications
+      if (document.referrer.includes('notifications.html')) {
+        window.location.href = 'notifications.html';
+      } else {
+        window.location.href = 'dash.html';
+      }
+    }
+
+    // Auto-refresh messages every 3 seconds when a chat is open
+    setInterval(() => {
+      if (currentChatRoom) {
+        loadMessages(currentChatRoom.id);
+      }
+    }, 3000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>View Skills | SkillSwap</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+</head>
+<body class="bg-gray-100 p-6">
+
+<div class="max-w-5xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold">All Skills</h2>
+    <button onclick="window.location.href='dash.html'" class="px-4 py-2 bg-gray-200 rounded-lg">Back to Dashboard</button>
+  </div>
+
+  <div class="flex gap-2 mb-4">
+    <input type="text" id="searchSkill" placeholder="Search title or category" class="border p-2 rounded-lg flex-1">
+    <select id="filterCategory" class="border p-2 rounded-lg">
+      <option value="All">All</option>
+      <option>Programming</option>
+      <option>Design</option>
+      <option>Music</option>
+      <option>Language</option>
+    </select>
+  </div>
+
+  <div id="skillsList" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+</div>
+
+<!-- Notification Modal -->
+<div id="requirementModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center z-50">
+  <div class="bg-white p-6 rounded-xl w-96 shadow-lg">
+    <h2 class="text-xl font-semibold mb-4 text-center">📝 Add Skill Exchange Details</h2>
+
+    <label class="block text-sm font-medium mb-1">Skill Name</label>
+    <input type="text" id="skillName" class="w-full border p-2 rounded mb-3" placeholder="e.g., Java, Cooking" readonly>
+
+    <label class="block text-sm font-medium mb-1">Duration / Time</label>
+    <input type="text" id="duration" class="w-full border p-2 rounded mb-3" placeholder="e.g., 2 weeks, 1 hour daily">
+
+    <label class="block text-sm font-medium mb-1">Message to Receiver</label>
+    <textarea id="message" class="w-full border p-2 rounded mb-4" placeholder="Describe your requirement..." rows="4"></textarea>
+
+    <div class="flex justify-between">
+      <button id="cancelBtn" class="bg-gray-300 px-4 py-2 rounded hover:bg-gray-400">Cancel</button>
+      <button id="sendNotificationBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+        📩 Send Notification
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+let skills = [];
+let sentRequests = [];
+const loggedInUser = parseInt(localStorage.getItem('ss_user_id')); // correct key
+
+if(!loggedInUser){
+  alert("❌ Please login first");
+  window.location.href = "login.html";
+}
+
+async function fetchSkills(){
+  const res = await fetch('http://localhost:5000/skills/all');
+  skills = await res.json();
+  await fetchSentRequests();
+  renderSkills();
+}
+
+async function fetchSentRequests(){
+  const res = await fetch(`http://localhost:5000/requests/${loggedInUser}`);
+  const data = await res.json();
+  // store skill_ids that user has already sent a request for
+  sentRequests = data.filter(r => r.from_user === loggedInUser && r.status === 'pending').map(r => r.skill_id);
+}
+
+function renderSkills(){
+  const list = document.getElementById('skillsList');
+  const search = document.getElementById('searchSkill').value.toLowerCase();
+  const filter = document.getElementById('filterCategory').value;
+
+  list.innerHTML = '';
+  skills.filter(s => 
+      (filter === "All" || s.category === filter) &&
+      (s.skill_name.toLowerCase().includes(search) || s.category.toLowerCase().includes(search))
+  ).forEach(s => {
+    const alreadyRequested = sentRequests.includes(s.skill_id);
+
+    list.innerHTML += `
+      <div class="bg-white p-4 rounded-xl shadow">
+        <h4 class="font-bold text-lg">${s.skill_name}</h4>
+        <p class="text-gray-600">${s.description}</p>
+        <p class="text-sm">Owner: ${s.owner_name}</p>
+        <p class="text-sm">Category: ${s.category}</p>
+        <p class="text-sm">Availability: ${s.availability || 'Anytime'}</p>
+        ${s.owner_id !== loggedInUser ? `
+          <div class="mt-3 space-y-2">
+            ${alreadyRequested 
+              ? `<button onclick="cancelRequest(${s.skill_id})" class="w-full py-2 bg-gray-600 text-white rounded-lg">Cancel Request</button>`
+              : `<button onclick="sendRequest(${s.skill_id}, ${s.owner_id})" class="w-full py-2 bg-blue-600 text-white rounded-lg">Send Request</button>`}
+            <button onclick="openRequirementModal(${s.skill_id}, ${s.owner_id}, '${s.skill_name}')" class="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+              ➕ Add Requirement & Notify
+            </button>
+          </div>` 
+        : `<p class="text-green-600 mt-2 font-bold">Your Skill</p>`}
+      </div>
+    `;
+  });
+}
+
+// Send Request and navigate to requests.html
+async function sendRequest(skill_id, to_user){
+  const res = await fetch('http://localhost:5000/requests/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from_user: loggedInUser, skill_id })
+  });
+  const data = await res.json();
+  alert(data.message || "✅ Request sent!");
+  // go to requests page
+  window.location.href = 'request.html';
+}
+
+// Cancel Request
+async function cancelRequest(skill_id){
+  const res = await fetch(`http://localhost:5000/requests/${loggedInUser}`);
+  const data = await res.json();
+  const req = data.find(r => r.skill_id === skill_id && r.from_user === loggedInUser && r.status === 'pending');
+  if(!req) return alert("❌ Request not found");
+
+  const cancelRes = await fetch(`http://localhost:5000/requests/cancel/${req.request_id}`, { method: 'DELETE' });
+  const cancelData = await cancelRes.json();
+  alert(cancelData.message || "✅ Request cancelled");
+  fetchSkills();
+}
+
+document.getElementById('searchSkill').addEventListener('input', renderSkills);
+document.getElementById('filterCategory').addEventListener('change', renderSkills);
+
+// Notification Modal Functions
+let selectedSkillId = null;
+let selectedUserId = null;
+
+function openRequirementModal(skillId, userId, skillName) {
+  selectedSkillId = skillId;
+  selectedUserId = userId;
+  
+  document.getElementById('skillName').value = skillName;
+  document.getElementById('duration').value = '';
+  document.getElementById('message').value = '';
+  document.getElementById('requirementModal').classList.remove('hidden');
+}
+
+document.getElementById('cancelBtn').addEventListener('click', () => {
+  document.getElementById('requirementModal').classList.add('hidden');
+});
+
+document.getElementById('sendNotificationBtn').addEventListener('click', async () => {
+  const skillName = document.getElementById('skillName').value;
+  const duration = document.getElementById('duration').value;
+  const message = document.getElementById('message').value;
+  
+  if (!skillName || !message) {
+    alert('❌ Please fill in the skill name and message');
+    return;
+  }
+
+  const payload = { 
+    fromUserId: loggedInUser, 
+    toUserId: selectedUserId, 
+    skillName, 
+    duration, 
+    message 
+  };
+
+  try {
+    const res = await fetch('http://localhost:5000/notifications/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    
+    if (res.ok) {
+      alert('📢 Notification sent successfully!');
+      document.getElementById('requirementModal').classList.add('hidden');
+      
+      // Optional: Also create a chat room for future communication
+      await createChatRoom(loggedInUser, selectedUserId, skillName);
+    } else {
+      alert('❌ Failed to send notification: ' + data.message);
+    }
+  } catch (err) {
+    console.error('Error sending notification:', err);
+    alert('❌ Failed to send notification');
+  }
+});
+
+// Create chat room for future communication
+async function createChatRoom(user1Id, user2Id, skillName) {
+  try {
+    const res = await fetch('http://localhost:5000/chat/room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        user1_id: user1Id, 
+        user2_id: user2Id, 
+        skill_name: skillName 
+      })
+    });
+    
+    if (res.ok) {
+      console.log('💬 Chat room created/found for future communication');
+    }
+  } catch (err) {
+    console.error('Error creating chat room:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', fetchSkills);
+</script>
+</body>
+</html>

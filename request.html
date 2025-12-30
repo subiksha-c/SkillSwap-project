@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connection Requests | SkillSwap</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+</head>
+<body class="bg-gray-100 p-6">
+
+<div class="max-w-3xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold">Connection Requests</h2>
+    <button onclick="window.location.href='dash.html'" class="px-4 py-2 bg-gray-200 rounded-lg">Back to Dashboard</button>
+  </div>
+
+  <div id="requestsList" class="grid gap-4"></div>
+</div>
+
+<script>
+const userId = parseInt(localStorage.getItem('ss_user_id')); 
+let requests = [];
+
+async function fetchRequests() {
+  if (!userId) {
+    alert("❌ Please login first!");
+    window.location.href = "login.html";
+    return;
+  }
+
+  try {
+    const res = await fetch(`http://localhost:5000/requests/${userId}`);
+    
+    if (!res.ok) {
+      throw new Error(`Server error: ${res.status}`);
+    }
+    
+    const data = await res.json();
+    
+    // Check if data is an array
+    if (Array.isArray(data)) {
+      requests = data;
+    } else {
+      console.error('Server returned non-array data:', data);
+      requests = [];
+    }
+    
+    renderRequests();
+  } catch (error) {
+    console.error('Error fetching requests:', error);
+    document.getElementById('requestsList').innerHTML = `
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p class="text-red-600">❌ Failed to load requests: ${error.message}</p>
+        <button onclick="fetchRequests()" class="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+          Try Again
+        </button>
+      </div>
+    `;
+    requests = [];
+  }
+}
+
+function renderRequests() {
+  const list = document.getElementById('requestsList');
+  
+  if (!Array.isArray(requests) || requests.length === 0) {
+    list.innerHTML = `<p class="text-gray-500 text-center">No requests found</p>`;
+    return;
+  }
+
+  list.innerHTML = '';
+  requests.forEach(r => {
+    const status = r.status ? r.status.toLowerCase() : 'unknown';
+    const isReceived = r.request_type === 'received';
+    const isSent = r.request_type === 'sent';
+    
+    // Determine if user can take action
+    const canAcceptReject = isReceived && status === 'pending';
+    const canCancel = isSent && status === 'pending';
+    
+    const requestTypeLabel = isReceived ? 'Received' : 'Sent';
+    const requestTypeColor = isReceived ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800';
+    
+    list.innerHTML += `
+      <div class="bg-white p-4 rounded-xl shadow border-l-4 ${isReceived ? 'border-blue-500' : 'border-purple-500'}">
+        <div class="flex justify-between items-start mb-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="px-2 py-1 ${requestTypeColor} text-xs rounded-full font-semibold">${requestTypeLabel}</span>
+              <span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">${status.toUpperCase()}</span>
+            </div>
+            <p class="font-semibold text-lg">${r.skill_name || 'Unknown Skill'}</p>
+            <p class="text-sm text-gray-600">
+              ${isReceived ? `From: ${r.from_user_name || 'Unknown'}` : `To: ${r.to_user_name || 'Unknown'}`}
+            </p>
+            <p class="text-xs text-gray-500">${formatDate(r.created_at)}</p>
+          </div>
+        </div>
+        
+        <div class="flex gap-2 flex-wrap">
+          ${canAcceptReject ? `
+            <button onclick="updateRequest(${r.request_id || r.id}, 'accepted')" 
+                    class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+              ✅ Accept (+10 points, +2 coins, +15 XP)
+            </button>
+            <button onclick="updateRequest(${r.request_id || r.id}, 'rejected')" 
+                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+              ❌ Reject
+            </button>
+          ` : ''}
+          
+          ${canCancel ? `
+            <button onclick="cancelRequest(${r.request_id || r.id})" 
+                    class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
+              🗑️ Cancel Request
+            </button>
+          ` : ''}
+          
+          ${status === 'accepted' ? `
+            <button onclick="startChat(${isReceived ? r.from_user : r.to_user}, '${r.skill_name}')" 
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
+              💬 Start Chat
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  });
+}
+
+// Helper function to format dates
+function formatDate(dateString) {
+  if (!dateString) return 'Unknown date';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffTime = Math.abs(now - date);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 1) return 'Today';
+  if (diffDays === 2) return 'Yesterday';
+  if (diffDays <= 7) return `${diffDays - 1} days ago`;
+  
+  return date.toLocaleDateString();
+}
+
+async function updateRequest(request_id, status){
+  try {
+    let endpoint;
+    if (status === 'accepted') {
+      endpoint = 'http://localhost:5000/requests/accept';
+    } else if (status === 'rejected') {
+      endpoint = 'http://localhost:5000/requests/reject';
+    } else {
+      throw new Error('Invalid status');
+    }
+    
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ request_id })
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok) {
+      alert(data.message);
+      fetchRequests(); // Refresh the list
+    } else {
+      alert('Error: ' + data.message);
+    }
+  } catch (error) {
+    console.error('Error updating request:', error);
+    alert('Failed to update request: ' + error.message);
+  }
+}
+
+async function cancelRequest(request_id){
+  if (!confirm('Are you sure you want to cancel this request?')) {
+    return;
+  }
+  
+  try {
+    const res = await fetch(`http://localhost:5000/requests/cancel/${request_id}`, { method: 'DELETE' });
+    const data = await res.json();
+    
+    if (res.ok) {
+      alert(data.message);
+      fetchRequests(); // Refresh the list
+    } else {
+      alert('Error: ' + data.message);
+    }
+  } catch (error) {
+    console.error('Error cancelling request:', error);
+    alert('Failed to cancel request: ' + error.message);
+  }
+}
+
+// Start chat function
+async function startChat(otherUserId, skillName) {
+  try {
+    // Check if chat room exists
+    const checkResponse = await fetch(`http://localhost:5000/chat/rooms/${userId}`);
+    if (checkResponse.ok) {
+      const rooms = await checkResponse.json();
+      const existingRoom = rooms.find(room => 
+        (room.user1_id === otherUserId || room.user2_id === otherUserId) && 
+        room.skill_name === skillName
+      );
+      
+      if (existingRoom) {
+        // Chat room exists, redirect to chat
+        window.location.href = `chat.html?room=${existingRoom.id}&skill=${encodeURIComponent(skillName)}`;
+      } else {
+        // Try to create chat room
+        const createResponse = await fetch('http://localhost:5000/chat/room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user1_id: userId,
+            user2_id: otherUserId,
+            skill_name: skillName
+          })
+        });
+        
+        if (createResponse.ok) {
+          const data = await createResponse.json();
+          window.location.href = `chat.html?room=${data.chat_room_id}&skill=${encodeURIComponent(skillName)}`;
+        } else {
+          alert('❌ Chat not available. The request must be accepted first.');
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error starting chat:', error);
+    alert('❌ Failed to start chat');
+  }
+}
+
+// Load requests on page load
+fetchRequests();
+</script>
+</body>
+</html>

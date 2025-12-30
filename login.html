@@ -1,0 +1,146 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login | SkillSwap</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f0f0f0;
+      height: 100vh;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .login-container {
+      background: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTgxNNFoX3aLkRhBNCE3Oi0RHgECYPcs2pid-FSB6VryIxQDD3nbtxIPTflol_AVyntfOo&usqp=CAUbgv') no-repeat center center/cover;
+      padding: 30px 40px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      width: 320px;
+      text-align: center;
+      color: white;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .overlay {
+      position: absolute;
+      top:0;
+      left:0;
+      width:100%;
+      height:100%;
+      background: rgba(0,0,0,0.6);
+      border-radius: 12px;
+      z-index: 1;
+    }
+
+    .login-content {
+      position: relative;
+      z-index: 2;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    input, button {
+      width: 100%;
+      height: 50px; /* same height */
+      padding: 0 12px;
+      margin: 10px 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      box-sizing: border-box; /* ensures padding doesn't increase total width */
+    }
+
+    input {
+      background-color: rgba(255,255,255,0.9);
+      color: #333;
+    }
+
+    button {
+      background-color: #4facfe;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background-color: #3b8ee6;
+    }
+
+    .footer-text {
+      margin-top: 15px;
+      font-size: 12px;
+    }
+
+    .footer-text a {
+      color: #4facfe;
+      text-decoration: none;
+    }
+
+    .error {
+      color: #ff6666;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="overlay"></div>
+    <div class="login-content">
+      <h2>Login</h2>
+      <div class="error" id="errorMsg"></div>
+      <form id="loginForm">
+        <input type="email" id="email" name="email" placeholder="Email" required />
+        <input type="password" id="password" name="password" placeholder="Password" required />
+        <button type="submit">Login</button>
+      </form>
+      <div class="footer-text">
+        Don't have an account? <a href="register.html">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const errorMsg = document.getElementById("errorMsg");
+      errorMsg.textContent = "";
+
+      try {
+        const res = await fetch("http://localhost:5000/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          const userData = data.user;
+          localStorage.setItem('ss_user', userData.name);
+          localStorage.setItem('ss_user_id', userData.id);
+          alert("✅ Login successful!");
+          window.location.href = "dash.html";
+        } else {
+          errorMsg.textContent = data.message || "❌ Invalid credentials";
+        }
+      } catch (err) {
+        errorMsg.textContent = "⚠️ Server not reachable.";
+      }
+    });
+  </script>
+</body>
+</html>

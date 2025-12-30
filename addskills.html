@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add Skill | SkillSwap</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+</head>
+<body class="bg-gray-100 flex justify-center items-center min-h-screen">
+  <div class="bg-white p-8 rounded-2xl shadow w-full max-w-xl">
+    <h2 class="text-2xl font-bold mb-4">Add Skill</h2>
+    <form id="addSkillForm" class="grid grid-cols-1 gap-4">
+      <input type="text" placeholder="Skill Name" id="skillName" class="border rounded-lg p-2" required>
+      <select id="skillCategory" class="border rounded-lg p-2" required>
+        <option value="">Select Category</option>
+        <option>Programming</option>
+        <option>Design</option>
+        <option>Music</option>
+        <option>Language</option>
+      </select>
+      <textarea id="skillDesc" placeholder="Description" class="border rounded-lg p-2"></textarea>
+      <input type="number" id="skillPrice" placeholder="Price ₹0 for free" class="border rounded-lg p-2">
+      <input type="text" id="skillAvail" placeholder="Availability (Weekends, 6–9 PM, etc.)" class="border rounded-lg p-2">
+      <div class="flex justify-between mt-4">
+        <button type="button" onclick="window.location.href='dash.html'" class="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Submit</button>
+      </div>
+    </form>
+    <p id="status" class="mt-2 text-green-600"></p>
+  </div>
+
+<script>
+const form = document.getElementById('addSkillForm');
+const status = document.getElementById('status');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const user_id = localStorage.getItem('ss_user_id'); // Correct key
+  if (!user_id) {
+    alert("❌ Please login first!");
+    return;
+  }
+
+  const skill = {
+    user_id,
+    skill_name: document.getElementById('skillName').value,
+    category: document.getElementById('skillCategory').value,
+    description: document.getElementById('skillDesc').value,
+    price: parseInt(document.getElementById('skillPrice').value) || 0,
+    availability: document.getElementById('skillAvail').value
+  };
+
+  try {
+    const res = await fetch('http://localhost:5000/skills/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(skill)
+    });
+
+    const data = await res.json();
+    if(res.ok){
+      alert("✅ Skill added successfully!");
+      window.location.href = 'viewskills.html'; // redirect after add
+    } else {
+      alert("❌ " + (data.error || data.message));
+    }
+  } catch (err) {
+    console.error(err);
+    alert("❌ Server error");
+  }
+});
+</script>
+</body>
+</html>

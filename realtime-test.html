@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-time Features Test | SkillSwap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/realtime.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-500 to-purple-600 min-h-screen">
+  <div class="container mx-auto p-8">
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-4xl mx-auto">
+      <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">🚀 SkillSwap Real-time Features Test</h1>
+      
+      <!-- Connection Status -->
+      <div class="bg-gray-50 rounded-lg p-4 mb-6">
+        <h2 class="text-xl font-semibold mb-3">📡 Connection Status</h2>
+        <div class="flex items-center gap-4">
+          <span id="connectionStatus" class="text-gray-500">Connecting...</span>
+          <button onclick="testConnection()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Test Connection
+          </button>
+        </div>
+      </div>
+
+      <!-- Feature Status -->
+      <div class="grid md:grid-cols-2 gap-6 mb-8">
+        <div class="bg-green-50 rounded-lg p-4">
+          <h3 class="text-lg font-semibold text-green-800 mb-2">✅ Completed Features</h3>
+          <ul class="space-y-2 text-green-700">
+            <li>• Real-time Backend Server (SSE)</li>
+            <li>• Database Tables Created</li>
+            <li>• Real-time JavaScript Module</li>
+            <li>• Enhanced Notifications Page</li>
+            <li>• Enhanced Chat System</li>
+            <li>• Sound Alerts & Browser Notifications</li>
+            <li>• Connection Status Indicators</li>
+          </ul>
+        </div>
+        
+        <div class="bg-blue-50 rounded-lg p-4">
+          <h3 class="text-lg font-semibold text-blue-800 mb-2">🎯 How to Test</h3>
+          <ol class="space-y-2 text-blue-700">
+            <li>1. Register/Login with 2 different accounts</li>
+            <li>2. User A: Add a skill</li>
+            <li>3. User B: Send notification request</li>
+            <li>4. User A: Receive real-time notification</li>
+            <li>5. User A: Accept request</li>
+            <li>6. Both users: Start real-time chat</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="flex flex-wrap gap-4 justify-center">
+        <a href="login.html" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          🔑 Login/Register
+        </a>
+        <a href="dash.html" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+          🏠 Dashboard
+        </a>
+        <a href="notifications.html" class="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+          📢 Notifications
+        </a>
+        <a href="chat.html" class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+          💬 Chat
+        </a>
+      </div>
+
+      <!-- Real-time Event Log -->
+      <div class="mt-8 bg-gray-50 rounded-lg p-4">
+        <h3 class="text-lg font-semibold mb-3">📊 Real-time Event Log</h3>
+        <div id="eventLog" class="bg-black text-green-400 p-4 rounded font-mono text-sm h-32 overflow-y-auto">
+          <div>Waiting for real-time events...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let eventCount = 0;
+    
+    function logEvent(message) {
+      const log = document.getElementById('eventLog');
+      const timestamp = new Date().toLocaleTimeString();
+      eventCount++;
+      log.innerHTML += `<div>[${timestamp}] ${eventCount}: ${message}</div>`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function testConnection() {
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      if (currentUser.id) {
+        logEvent(`Testing connection for user ${currentUser.id}...`);
+        window.realTimeManager.connect(currentUser.id);
+      } else {
+        logEvent('No user logged in. Please login first.');
+        alert('Please login first to test real-time features.');
+      }
+    }
+
+    function showConnectionStatus(connected) {
+      const statusElement = document.getElementById('connectionStatus');
+      if (statusElement) {
+        statusElement.textContent = connected ? '🟢 Connected to Real-time Server' : '🔴 Disconnected';
+        statusElement.className = connected ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+      }
+    }
+
+    // Setup real-time event listeners
+    if (window.realTimeManager) {
+      window.realTimeManager.on('connected', () => {
+        logEvent('✅ Connected to real-time server');
+        showConnectionStatus(true);
+      });
+
+      window.realTimeManager.on('notification', (data) => {
+        logEvent(`📢 New notification from ${data.from_user_name}: ${data.skill_name}`);
+      });
+
+      window.realTimeManager.on('chat_message', (data) => {
+        logEvent(`💬 New chat message from ${data.sender_name}: ${data.message.substring(0, 30)}...`);
+      });
+
+      window.realTimeManager.on('request_accepted', (data) => {
+        logEvent(`✅ Request accepted: ${data.message}`);
+      });
+
+      window.realTimeManager.on('error', () => {
+        logEvent('❌ Real-time connection error');
+        showConnectionStatus(false);
+      });
+
+      // Auto-connect if user is logged in
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      if (currentUser.id) {
+        logEvent(`Auto-connecting for user ${currentUser.id}...`);
+        window.realTimeManager.connect(currentUser.id);
+      } else {
+        logEvent('No user logged in. Please login to test real-time features.');
+      }
+    } else {
+      logEvent('❌ Real-time manager not loaded');
+    }
+  </script>
+</body>
+</html>

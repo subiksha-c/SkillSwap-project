@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkillSwap | Gamified Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="js/realtime.js"></script>
+  <style>
+    body {
+      background:url('https://cdn.dribbble.com/userupload/14940716/file/original-1c0bcc60a84660d9794fe0f182b21574.png') no-repeat center center fixed;
+      background-size: cover;
+      font-family: 'Inter', sans-serif;
+    }
+    .overlay { min-height:100vh; background-color: rgba(0,0,0,0.6); }
+    .achievement-popup {
+      position:fixed; bottom:20px; right:20px; background:#F59E0B; color:white; padding:1rem 1.5rem;
+      border-radius:1rem; box-shadow:0 4px 10px rgba(0,0,0,0.3); display:none; animation:fadeInOut 3s forwards;
+    }
+    @keyframes fadeInOut {
+      0% {opacity:0; transform: translateY(50px);}
+      10%,90% {opacity:1; transform: translateY(0);}
+      100% {opacity:0; transform: translateY(50px);}
+    }
+
+    /* === Chatbot Styles === */
+    #chatbot-icon {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #4CAF50;
+      color: white;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 28px;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+    #chatbot-window {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 320px;
+      height: 400px;
+      background: #fff;
+      border-radius: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 1000;
+    }
+    #chatbot-header {
+      background: #4CAF50;
+      color: white;
+      padding: 12px;
+      text-align: center;
+      font-weight: bold;
+    }
+    #chatbot-messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .message {
+      max-width: 80%;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .user { align-self: flex-end; background: #DCF8C6; }
+    .bot { align-self: flex-start; background: #F1F0F0; }
+    #chatbot-input {
+      display: flex;
+      border-top: 1px solid #ddd;
+    }
+    #chatbot-input input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      outline: none;
+      font-size: 14px;
+    }
+    #chatbot-input button {
+      background: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 15px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+<div class="overlay">
+
+  <!-- Navbar -->
+  <nav class="bg-gray-900 text-white px-6 py-3 flex justify-between items-center">
+    <h1 class="text-2xl font-bold">SkillSwap 🔥</h1>
+    <div class="flex items-center gap-6">
+      <span id="coinsBadge" class="bg-yellow-400 text-gray-900 px-3 py-1 rounded-full font-semibold">Coins: 50</span>
+      <span id="pointsBadge" class="bg-green-400 text-white px-3 py-1 rounded-full font-semibold">Points: 100</span>
+      <span id="xpBadge" class="bg-blue-400 text-white px-3 py-1 rounded-full font-semibold">XP: 0</span>
+      <a href="notifications.html" class="hover:underline relative">
+        📢 Notifications
+        <span id="navUnreadCount" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full text-xs px-1 hidden">0</span>
+      </a>
+      <a href="chat.html" class="hover:underline">💬 Chat</a>
+      <a href="#" id="myProfile" class="hover:underline">Profile</a>
+      <button id="logout" class="hover:underline">Logout</button>
+    </div>
+  </nav>
+
+  <!-- Dashboard Header -->
+  <div class="p-8">
+    <h2 class="text-3xl font-bold text-white mb-6">Welcome, <span id="username">Guest</span> 👋</h2>
+
+    <!-- XP Bar -->
+    <div class="mb-6 w-full bg-gray-300 rounded-full h-6 overflow-hidden">
+      <div id="xpBar" class="h-full bg-blue-500 text-white text-center font-semibold" style="width:0%">0 XP</div>
+    </div>
+
+    <!-- Profile Card -->
+    <div class="bg-white p-6 rounded-2xl shadow mb-8 flex items-center gap-4">
+      <div id="profileAvatar" class="w-20 h-20 flex items-center justify-center rounded-full text-3xl font-bold text-white border-4 border-blue-400">G</div>
+      <div>
+        <h3 class="text-xl font-bold" id="profileName">Guest</h3>
+        <p class="text-gray-600">Badge: <span id="profileBadge">Bronze</span></p>
+        <p class="text-gray-600">Total XP: <span id="profileXP">0</span></p>
+        <button id="editProfileBtn" class="mt-2 px-3 py-1 bg-blue-500 text-white rounded">Edit Profile</button>
+      </div>
+    </div>
+
+    <!-- Dashboard Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+      <div class="bg-white p-6 rounded-2xl shadow hover:shadow-lg cursor-pointer transition" onclick="window.location.href='addskills.html'">
+        <h3 class="font-semibold text-lg mb-2">➕ Add Skill</h3>
+        <p class="text-gray-600">Share your expertise and earn points & badges.</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow hover:shadow-lg cursor-pointer transition" onclick="window.location.href='skill-exchange.html'">
+        <h3 class="font-semibold text-lg mb-2">🔄 Skill Exchange</h3>
+        <p class="text-gray-600">Browse skills, send requests, manage exchanges & chat.</p>
+      </div>
+       <div class="bg-white p-6 rounded-2xl shadow hover:shadow-lg cursor-pointer transition" onclick="window.location.href='request.html'">
+       <h3 class="font-semibold text-lg mb-2">🔗 Requests</h3>
+       <p class="text-gray-600">Accept or reject incoming requests.</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow">
+        <h3 class="font-semibold text-lg mb-2">💰 Wallet</h3>
+        <p class="text-gray-600 mb-2">Skill Coins balance</p>
+        <span id="walletCoins" class="font-bold text-xl text-yellow-600">50 Coins</span>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow">
+        <h3 class="font-semibold text-lg mb-2">📊 My Progress</h3>
+        <div class="w-full bg-gray-200 rounded-full h-4">
+          <div id="progressBar" class="bg-green-500 h-4 rounded-full" style="width:30%"></div>
+        </div>
+        <p class="mt-2 text-sm text-gray-500">Progress in active skills</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow">
+        <h3 class="font-semibold text-lg mb-2">🏅 Achievements</h3>
+        <ul id="achievementsList" class="text-gray-600 list-disc list-inside">
+          <li>First Skill Added 🥉</li>
+        </ul>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow cursor-pointer hover:shadow-lg transition" onclick="window.location.href='notifications.html'">
+        <h3 class="font-semibold text-lg mb-2">📢 Notifications</h3>
+        <ul id="notificationsList" class="text-gray-600">
+          <li>Loading notifications...</li>
+        </ul>
+        <div class="mt-2">
+          <span id="unreadCount" class="px-2 py-1 bg-red-500 text-white rounded-full text-xs font-semibold hidden">0</span>
+        </div>
+      </div>
+      <div class="bg-white p-6 rounded-2xl shadow sm:col-span-2">
+        <h3 class="font-semibold text-lg mb-2">📰 Community Feed</h3>
+        <ul id="feedList" class="text-gray-600 space-y-1">
+          <li>✨ Priya added Python Skill</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Real-time Monitoring Section -->
+    <div class="bg-white p-6 rounded-2xl shadow mb-8">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-2xl font-bold text-gray-800">📡 Real-time Status</h3>
+        <div class="flex items-center gap-4">
+          <span id="realtimeStatus" class="text-gray-500">Connecting...</span>
+          <button onclick="testRealtimeConnection()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+            Test Connection
+          </button>
+        </div>
+      </div>
+      
+      <!-- Real-time Features Status -->
+      <div class="grid md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-green-50 rounded-lg p-4">
+          <h4 class="font-semibold text-green-800 mb-2">✅ Active Features</h4>
+          <ul class="text-sm text-green-700 space-y-1">
+            <li>• Real-time Notifications</li>
+            <li>• Instant Chat Messages</li>
+            <li>• Sound Alerts</li>
+            <li>• Browser Notifications</li>
+          </ul>
+        </div>
+        
+        <div class="bg-blue-50 rounded-lg p-4">
+          <h4 class="font-semibold text-blue-800 mb-2">📊 Event Statistics</h4>
+          <div class="text-sm text-blue-700 space-y-1">
+            <div>Notifications: <span id="notificationCount" class="font-semibold">0</span></div>
+            <div>Chat Messages: <span id="chatMessageCount" class="font-semibold">0</span></div>
+            <div>Connections: <span id="connectionCount" class="font-semibold">0</span></div>
+          </div>
+        </div>
+        
+        <div class="bg-purple-50 rounded-lg p-4">
+          <h4 class="font-semibold text-purple-800 mb-2">🎯 Quick Actions</h4>
+          <div class="space-y-2">
+            <button onclick="window.location.href='notifications.html'" class="w-full px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700">
+              📢 Notifications
+            </button>
+            <button onclick="window.location.href='chat.html'" class="w-full px-3 py-1 bg-purple-600 text-white rounded text-sm hover:bg-purple-700">
+              💬 Chat
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Real-time Event Log -->
+      <div class="bg-gray-50 rounded-lg p-4">
+        <div class="flex justify-between items-center mb-3">
+          <h4 class="font-semibold text-gray-800">📊 Live Event Log</h4>
+          <button onclick="clearEventLog()" class="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700">
+            Clear Log
+          </button>
+        </div>
+        <div id="dashboardEventLog" class="bg-black text-green-400 p-3 rounded font-mono text-xs h-24 overflow-y-auto">
+          <div>Real-time monitoring initialized...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="bg-white p-6 rounded-2xl shadow mb-8">
+      <h3 class="text-2xl font-bold mb-4">🏆 Leaderboard</h3>
+      <ul id="leaderboard" class="space-y-2 text-gray-700"></ul>
+    </div>
+
+    <!-- Masters -->
+    <div class="bg-white p-6 rounded-2xl shadow">
+      <h3 class="text-2xl font-bold mb-4">Available Masters Now</h3>
+      <div id="mastersList" class="grid grid-cols-1 sm:grid-cols-3 gap-4"></div>
+    </div>
+  </div>
+
+  <!-- Achievement Popup -->
+  <div id="achievementPopup" class="achievement-popup"></div>
+</div>
+
+<!-- Chatbot -->
+<div id="chatbot-icon">🤖</div>
+<div id="chatbot-window">
+  <div id="chatbot-header">SkillSwap Bot</div>
+  <div id="chatbot-messages"></div>
+  <div id="chatbot-input">
+    <input type="text" id="userInput" placeholder="Type a message...">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+  // === User Load ===
+  const usernameEl=document.getElementById('username');
+  const profileName=document.getElementById('profileName');
+  const avatarEl=document.getElementById('profileAvatar');
+  const savedUser = localStorage.getItem('ss_user');
+  if (!savedUser) window.location.href = "login.html";
+  usernameEl.textContent = savedUser;
+  profileName.textContent = savedUser;
+  function stringToColor(str) {
+    let hash=0;
+    for(let i=0;i<str.length;i++){hash=str.charCodeAt(i)+((hash<<5)-hash);}
+    return `hsl(${hash%360},70%,50%)`;
+  }
+  avatarEl.textContent=savedUser.charAt(0).toUpperCase();
+  avatarEl.style.background=stringToColor(savedUser);
+
+  document.getElementById("logout").onclick=()=>{localStorage.clear(); window.location.href="login.html";};
+
+  // === Chatbot ===
+  const chatbotIcon=document.getElementById("chatbot-icon");
+  const chatbotWindow=document.getElementById("chatbot-window");
+  const messagesContainer=document.getElementById("chatbot-messages");
+  const userInput=document.getElementById("userInput");
+
+  chatbotIcon.onclick=()=>{chatbotWindow.style.display=chatbotWindow.style.display==="flex"?"none":"flex";};
+
+  function sendMessage(){
+    const text=userInput.value.trim();
+    if(text==="")return;
+    appendMessage("user",text);
+    setTimeout(()=>botReply(text.toLowerCase()),500);
+    userInput.value="";
+  }
+
+  function appendMessage(sender,text){
+    const msg=document.createElement("div");
+    msg.classList.add("message",sender);
+    msg.innerText=text;
+    messagesContainer.appendChild(msg);
+    messagesContainer.scrollTop=messagesContainer.scrollHeight;
+  }
+
+  function botReply(text) {
+  let reply = "Sorry, I didn’t understand. Try asking 'help'.";
+
+  if (text.includes("hello") || text.includes("hi")) {
+    reply = "Hello 👋! I'm your SkillSwap bot. Type 'help' to see what I can do.";
+  } 
+  else if (text.includes("help")) {
+    reply = "📝 I can help you with:\n- 'points' → show your points\n- 'coins' → show wallet coins\n- 'xp' → show XP\n- 'add skill' → go to Add Skill page\n- 'view skills' → see all skills\n- 'requests' → view your requests";
+  }
+  else if (text.includes("points")) {
+    const pointsText = document.getElementById("pointsBadge").innerText;
+    reply = `⭐ Your current ${pointsText}`;
+  } 
+  else if (text.includes("coins")) {
+    const coinsText = document.getElementById("coinsBadge").innerText;
+    reply = `💰 Your ${coinsText}`;
+  } 
+  else if (text.includes("xp")) {
+    const xpText = document.getElementById("xpBadge").innerText;
+    reply = `📈 Your ${xpText}`;
+  } 
+  else if (text.includes("add skill")) {
+    reply = "Redirecting you to ➕ Add Skill page...";
+    setTimeout(() => window.location.href = "addskills.html", 800);
+  } 
+  else if (text.includes("view skills")) {
+    reply = "Opening 📚 View Skills...";
+    setTimeout(() => window.location.href = "viewskills.html", 800);
+  } 
+  else if (text.includes("request")) {
+    reply = "Opening 🔗 Requests page...";
+    setTimeout(() => window.location.href = "request.html", 800);
+  }
+  else if(text.includes("I have one doubt")){
+    reply="yes,i here to help you anytime,anydoubts.";
+  }
+  else if(text.includes("which language is easy to learn?")){
+    reply="i prefer python is easy for freshers to learn";
+  }
+  else if(text.includes("thank you")){
+    reply="yes ,feel free to ask any doubts thankyou.";
+  }
+
+  appendMessage("bot", reply);
+}
+userInput.addEventListener("keypress",function(e){if(e.key==="Enter")sendMessage();});
+  // === 🔥 Dynamic Points Updater ===
+ async function loadUserPoints() {
+  const userId = localStorage.getItem('ss_user_id');
+  if (!userId) return;
+
+  try {
+    const res = await fetch(`http://localhost:5000/api/user-points/${userId}`);
+    if (res.ok) {
+      const data = await res.json();
+      document.getElementById('pointsBadge').textContent = `Points: ${data.points}`;
+      document.getElementById('coinsBadge').textContent = `Coins: ${data.coins}`;
+      document.getElementById('xpBadge').textContent = `XP: ${data.xp}`;
+
+      // Optional: Update XP progress bar visually
+      const xpBar = document.getElementById('xpBar');
+      xpBar.style.width = `${Math.min(data.xp, 100)}%`;
+      xpBar.textContent = `${data.xp} XP`;
+    } else {
+      console.error("Failed to fetch user points");
+    }
+  } catch (err) {
+    console.error("Error fetching points:", err);
+  }
+}
+async function sendSkillRequest(skill_id) {
+  const userId = localStorage.getItem('ss_user_id'); // store user id on login
+  try {
+    const res = await fetch(`http://localhost:5000/requests/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from_user: userId, skill_id }),
+    });
+
+    const data = await res.json();
+    alert(data.message);
+
+    // ✅ Refresh points after backend update
+    loadUserPoints(); 
+  } catch (err) {
+    console.error(err);
+  }
+}
+async function updateRequest(requestId, status) {
+  try {
+    const res = await fetch(`http://localhost:5000/requests/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request_id: requestId, status }),
+    });
+
+    const data = await res.json();
+    alert(data.message);
+
+    // ✅ Refresh points after backend updates
+    loadUserPoints();
+  } catch (err) {
+    console.error(err);
+  }
+}
+// === Load Notifications ===
+async function loadNotifications() {
+  const userId = localStorage.getItem('ss_user_id');
+  if (!userId) return;
+
+  try {
+    const res = await fetch(`http://localhost:5000/notifications/${userId}`);
+    if (res.ok) {
+      const notifications = await res.json();
+      const notificationsList = document.getElementById('notificationsList');
+      const unreadCount = document.getElementById('unreadCount');
+      
+      const unreadNotifications = notifications.filter(n => n.status === 'unread');
+      
+      if (notifications.length === 0) {
+        notificationsList.innerHTML = '<li>No notifications yet</li>';
+      } else {
+        const recentNotifications = notifications.slice(0, 3);
+        notificationsList.innerHTML = recentNotifications.map(n => 
+          `<li class="text-sm ${n.status === 'unread' ? 'font-semibold text-blue-600' : ''}">
+            ${n.from_user_name}: ${n.skill_name}
+          </li>`
+        ).join('');
+        
+        if (notifications.length > 3) {
+          notificationsList.innerHTML += `<li class="text-xs text-gray-500 mt-1">+${notifications.length - 3} more...</li>`;
+        }
+      }
+      
+      if (unreadNotifications.length > 0) {
+        unreadCount.textContent = unreadNotifications.length;
+        unreadCount.classList.remove('hidden');
+        
+        // Update navbar badge
+        const navUnreadCount = document.getElementById('navUnreadCount');
+        navUnreadCount.textContent = unreadNotifications.length;
+        navUnreadCount.classList.remove('hidden');
+      } else {
+        unreadCount.classList.add('hidden');
+        document.getElementById('navUnreadCount').classList.add('hidden');
+      }
+    }
+  } catch (err) {
+    console.error('Error loading notifications:', err);
+    document.getElementById('notificationsList').innerHTML = '<li>Failed to load notifications</li>';
+  }
+}
+
+// Call functions on page load
+loadUserPoints();
+loadNotifications();
+
+// Optional: If points are changed elsewhere and saved in localStorage
+window.addEventListener('storage', (e) => {
+  if (e.key === 'user_points') {
+    document.getElementById('pointsBadge').textContent = `Points: ${e.newValue}`;
+  }
+});
+
+// Refresh notifications every 30 seconds
+setInterval(loadNotifications, 30000);
+
+// === Real-time Monitoring Functions ===
+let dashboardEventCount = 0;
+let notificationEventCount = 0;
+let chatMessageEventCount = 0;
+let connectionEventCount = 0;
+
+function logDashboardEvent(message) {
+  const log = document.getElementById('dashboardEventLog');
+  const timestamp = new Date().toLocaleTimeString();
+  dashboardEventCount++;
+  
+  const eventDiv = document.createElement('div');
+  eventDiv.textContent = `[${timestamp}] ${dashboardEventCount}: ${message}`;
+  log.appendChild(eventDiv);
+  log.scrollTop = log.scrollHeight;
+  
+  // Keep only last 20 events
+  while (log.children.length > 20) {
+    log.removeChild(log.firstChild);
+  }
+}
+
+function updateEventCounters() {
+  document.getElementById('notificationCount').textContent = notificationEventCount;
+  document.getElementById('chatMessageCount').textContent = chatMessageEventCount;
+  document.getElementById('connectionCount').textContent = connectionEventCount;
+}
+
+function showRealtimeStatus(connected) {
+  const statusElement = document.getElementById('realtimeStatus');
+  if (statusElement) {
+    statusElement.textContent = connected ? '🟢 Connected' : '🔴 Disconnected';
+    statusElement.className = connected ? 'text-green-600 font-medium' : 'text-red-600 font-medium';
+  }
+}
+
+function testRealtimeConnection() {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  if (currentUser.id) {
+    logDashboardEvent(`Testing connection for user ${currentUser.id}...`);
+    if (window.realTimeManager) {
+      window.realTimeManager.connect(currentUser.id);
+    } else {
+      logDashboardEvent('❌ Real-time manager not available');
+    }
+  } else {
+    logDashboardEvent('❌ No user logged in');
+    alert('Please login first to test real-time features.');
+  }
+}
+
+function clearEventLog() {
+  const log = document.getElementById('dashboardEventLog');
+  log.innerHTML = '<div>Event log cleared...</div>';
+  dashboardEventCount = 0;
+}
+
+// Setup real-time event listeners for dashboard
+if (window.realTimeManager) {
+  window.realTimeManager.on('connected', () => {
+    connectionEventCount++;
+    logDashboardEvent('✅ Connected to real-time server');
+    showRealtimeStatus(true);
+    updateEventCounters();
+  });
+
+  window.realTimeManager.on('notification', (data) => {
+    notificationEventCount++;
+    logDashboardEvent(`📢 New notification from ${data.from_user_name}: ${data.skill_name}`);
+    updateEventCounters();
+    
+    // Refresh notifications display
+    setTimeout(loadNotifications, 500);
+  });
+
+  window.realTimeManager.on('chat_message', (data) => {
+    chatMessageEventCount++;
+    logDashboardEvent(`💬 New chat message from ${data.sender_name}`);
+    updateEventCounters();
+  });
+
+  window.realTimeManager.on('request_accepted', (data) => {
+    logDashboardEvent(`✅ Request accepted: ${data.message}`);
+    // Refresh notifications and points
+    setTimeout(() => {
+      loadNotifications();
+      loadUserPoints();
+    }, 500);
+  });
+
+  window.realTimeManager.on('error', () => {
+    logDashboardEvent('❌ Real-time connection error');
+    showRealtimeStatus(false);
+  });
+
+  // Auto-connect if user is logged in
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  if (currentUser.id) {
+    logDashboardEvent(`Auto-connecting for user ${currentUser.id}...`);
+    connectionEventCount++;
+    updateEventCounters();
+  } else {
+    logDashboardEvent('No user logged in for real-time features');
+  }
+} else {
+  logDashboardEvent('❌ Real-time manager not loaded');
+}
+
+// Initialize dashboard real-time monitoring
+logDashboardEvent('Dashboard real-time monitoring initialized');
+updateEventCounters();
+
+</script>
+</body>
+</html>
